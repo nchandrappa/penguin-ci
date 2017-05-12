@@ -1,0 +1,51 @@
+---
+resources:
+# Stemcell
+- name: stemcell
+  type: bosh-io-stemcell
+  source:
+    name: bosh-aws-xen-hvm-ubuntu-trusty-go_agent
+    version_family: '3363.latest'
+
+# ENV
+- name: penguin-env-director-state
+  type: git
+  source:
+    branch: master
+    uri: git@github.com:fushewokunze-pivotal/penguin-env.git 
+    private_key: {{penguin_env_private_key}} 
+    paths:
+    - bbl-state.json
+
+- name: runtime-ci
+  type: git
+  source:
+    branch: master
+    uri: https://github.com/cloudfoundry/runtime-ci.git
+
+- name: penguin-ci
+  type: git
+  source:
+    branch: master
+    uri: https://github.com/fushewokunze-pivotal/penguin-ci.git
+
+
+
+jobs:
+- name: deploy-PivotalCloudCache
+  public: true
+  build_logs_to_retain: 100
+  plan:
+  - aggregate:
+    - get: stemcell
+      trigger: true
+    - get: penguin-env-director-state
+      trigger: true
+    - get: runtime-ci
+    - get: penguin-ci
+      trigger: true
+  - task: deploy-cloudcache
+    file: penguin-ci/scripts/ci/bosh-deploy-cloudcache/task.yml
+    input_mapping:
+      bbl-state: penguin-env-director-state
+

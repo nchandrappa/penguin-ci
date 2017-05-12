@@ -1,0 +1,390 @@
+---
+name: p-cloudcache
+releases:
+- name: gemfire
+  url: https://s3.amazonaws.com/concourse-release-bucket/cloudcache/gemfire-1.0.2.tgz
+  shal1: e79bb5d6a255ec786bd2d435a70f244c-33
+  version: 1.0.2
+- name: gemfire-service-adapter
+  url: https://s3.amazonaws.com/concourse-release-bucket/cloudcache/gemfire-service-adapter-1.0.2.tgz
+  shal1: cf4be2e24b203e99665d85acba1dffa6-44
+  version: 1.0.2
+- name: on-demand-service-broker
+  url: https://s3.amazonaws.com/concourse-release-bucket/cloudcache/on-demand-service-broker-0.15.2.tgz
+  shal1: 6932b157870382080fd5c8bf78bf55f2-12
+  version: 0.15.2
+- name: routing
+  url: https://s3.amazonaws.com/concourse-release-bucket/cloudcache/routing-release-0.147.0.tgz
+  sha1: 1abccaebe22a5e291140963cde93f344-12
+  version: 0.147.0
+stemcells:
+- alias: bosh-aws-xen-hvm-ubuntu-trusty-go_agent
+  os: ubuntu-trusty
+  version: '3363.20'
+instance_groups:
+- name: cloudcache-broker
+  azs:
+  - services
+  instances: 1
+  lifecycle: service
+  jobs:
+  - name: service-adapter
+    release: gemfire-service-adapter
+    consumes: {}
+    provides: {}
+  - name: broker
+    release: on-demand-service-broker
+    consumes: {}
+    provides: {}
+  vm_type: t2.micro
+  stemcell: bosh-aws-xen-hvm-ubuntu-trusty-go_agent
+  properties:
+    port: 8080
+    username: admin
+    password: ((cloudcache-broker-password))
+    disable_ssl_cert_verification: ((skip_ssl_validation)) 
+    cf:
+      system_domain: ((system_domain))
+      url: https://api.((system_domain))
+      root_ca_cert: "((cf-cert))"
+      authentication:
+        url: https://uaa.((system_domain))
+        client_credentials:
+          client_id: cf
+          secret: ((/aws-director-credhub/cf/push_apps_manager_password))
+      nats:
+        machines:
+        - 10.0.5.191
+        port: 4222
+        user: nats
+        password: ((/aws-director-credhub/cf/nats_password))
+    bosh:
+      url: https://10.0.16.10:25555
+      root_ca_cert: "((bosh-director-ca-cert))"
+      authentication:
+        uaa:
+          url: https://10.0.16.10:8443
+          client_id: cf
+          client_secret: ((/aws-director-credhub/cf/push_apps_manager_password))
+    service_adapter:
+      path: "/var/vcap/jobs/service-adapter/bin/service-adapter"
+    service_deployment:
+      stemcell:
+        os: ubuntu-trusty
+        version: '3363.20'
+      releases:
+      - name: gemfire
+        version: 1.0.2
+        jobs:
+        - gemfire-locator
+        - gemfire-server
+      - name: routing
+        version: 0.147.0
+        jobs:
+        - route_registrar
+    service_catalog:
+      id: 3edcf74e-bb5a-46d0-822f-78efd5f3279e
+      service_name: p-cloudcache
+      service_description: Pivotal Cloud Cache offers the ability to deploy a GemFire
+        cluster as a service in Pivotal Cloud Foundry.
+      bindable: true
+      plan_updatable: false
+      metadata:
+        display_name: Pivotal Cloud Cache
+        image_url: data:image/png;base64,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
+        long_description: Pivotal Cloud Cache offers the ability to deploy a GemFire
+          cluster as a service in Pivotal Cloud Foundry.
+        provider_display_name: Pivotal Cloud Cache
+        documentation_url: http://p-cloudcache-docs-staging.cfapps.io/p-cloud-cache/index.html
+      global_properties:
+        service_instance_limit: 50
+      tags:
+      - gemfire
+      - cloudcache
+      - database
+      - pivotal
+      plans:
+      - name: extra-small
+        plan_id: 8b4d5f78-6719-4ccc-8b70-59bd396c0991
+        description: Plan Description
+        cf_service_access: enable
+        metadata:
+          display_name: Caching
+          bullets:
+          - gemfire
+        update:
+          canaries: 1
+          max_in_flight: 1
+          canary_watch_time: 1000-300000
+          update_watch_time: 1000-300000
+          serial: true
+        quotas:
+          service_instance_limit: 10
+        properties:
+          max_servers_per_cluster: 32
+        instance_groups:
+        - name: locator
+          vm_type: m3.medium
+          persistent_disk_type: '5GB'
+          instances: 3
+          networks:
+          - private
+          azs: &1
+          - services
+          vm_extensions: &2
+          - internet-required
+        - name: server
+          vm_type: m3.large
+          persistent_disk_type: '10GB'
+          instances: 4
+          networks:
+          - private
+          azs: *1
+          vm_extensions: *2
+      - name: small
+        plan_id: afd5b714-fd28-11e6-beff-731db4449825
+        description: Plan Description
+        cf_service_access: enable
+        metadata:
+          display_name: Caching
+          bullets:
+          - gemfire
+        update:
+          canaries: 1
+          max_in_flight: 1
+          canary_watch_time: 1000-300000
+          update_watch_time: 1000-300000
+          serial: true
+        quotas:
+          service_instance_limit: 10
+        properties:
+          max_servers_per_cluster: 32
+        instance_groups:
+        - name: locator
+          vm_type: m3.medium
+          persistent_disk_type: '5GB'
+          instances: 3
+          networks:
+          - private
+          azs: &3
+          - services
+          vm_extensions: *2
+        - name: server
+          vm_type: m3.large
+          persistent_disk_type: '10GB'
+          instances: 8
+          networks:
+          - private
+          azs: *3
+          vm_extensions: *2
+  env:
+    bosh:
+      password: "$6$8682df55716f975e$DZHwr.Nf0y5pAB2725jkWfQdA.dN646Tu/Ipz8MNvaKF4uFGitjSlo5xdeW6t.kvyKo6qzBC5RTR26Z5F/QxI."
+  update:
+    max_in_flight: 1
+  networks:
+  - name: private
+    default:
+    - dns
+    - gateway
+    static_ips:
+    - 10.0.7.210
+  migrated_from:
+  - name: cloudcache-broker-partition
+    az: services
+  persistent_disk_type: '1GB'
+- name: register-broker
+  azs:
+  - services
+  instances: 1
+  lifecycle: errand
+  jobs:
+  - name: register-broker
+    release: on-demand-service-broker
+    consumes: {}
+    provides: {}
+  vm_type: c4.large
+  stemcell: bosh-aws-xen-hvm-ubuntu-trusty-go_agent
+  properties:
+    broker_name: cloudcache-broker
+    disable_ssl_cert_verification: ((skip_ssl_validation))
+    cf:
+      api_url: https://api.((system_domain))
+      admin_username: push_apps_manager
+      admin_password: ((/aws-director-credhub/cf/push_apps_manager_password))
+    smoke_tests:
+      service_plan:
+        name: extra-small
+      api: https://api.((system_domain))
+      user: admin
+      password: ((cloudcache-admin-password))
+      skip_ssl_validation: ((skip_ssl_validation))
+  env:
+    bosh:
+      password: "$6$b6f7ae2ac9bd9f39$ycanVDf7G.IwA0mv6xwYRagvJfaInCyt9sweCzWqnG1ZMdgroGDPYYnmc4uXf1y0wvWakRtmyRyDgobWSPhMF1"
+  update:
+    max_in_flight: 1
+  networks:
+  - name: private
+    default:
+    - dns
+    - gateway
+- name: deregister-broker
+  azs:
+  - services
+  instances: 1
+  lifecycle: errand
+  jobs:
+  - name: deregister-broker
+    release: on-demand-service-broker
+    consumes: {}
+    provides: {}
+  vm_type: c4.large
+  stemcell: bosh-aws-xen-hvm-ubuntu-trusty-go_agent
+  properties:
+    broker_name: cloudcache-broker
+    disable_ssl_cert_verification: ((skip_ssl_validation))
+    cf:
+      api_url: https://api.((system_domain))
+      admin_username: push_apps_manager
+      admin_password: ((/aws-director-credhub/cf/push_apps_manager_password))
+    smoke_tests:
+      service_plan:
+        name: extra-small
+      api: https://api.((system_domain))
+      user: admin
+      password: ((cloudcache-admin-password))
+      skip_ssl_validation: ((skip_ssl_validation))
+  env:
+    bosh:
+      password: "$6$b55a388d9815f608$cNgM6jU5fu4cfsxqvfebdGbcth1L00/Qm3iiNEPKhRRKp3CMUjnJbxmTEWo5ZsDuGJjFB5S88iYuoyrQzfujR0"
+  update:
+    max_in_flight: 1
+  networks:
+  - name: private
+    default:
+    - dns
+    - gateway
+- name: smoke-tests
+  azs:
+  - services
+  instances: 1
+  lifecycle: errand
+  jobs:
+  - name: smoke-tests
+    release: gemfire-service-adapter
+    consumes: {}
+    provides: {}
+  vm_type: c4.large
+  stemcell: bosh-aws-xen-hvm-ubuntu-trusty-go_agent
+  properties:
+    broker_name: cloudcache-broker
+    disable_ssl_cert_verification: ((skip_ssl_validation))
+    cf:
+      api_url: https://api.((system_domain))
+      admin_username: push_apps_manager
+      admin_password: ((/aws-director-credhub/cf/push_apps_manager_password))
+    smoke_tests:
+      service_plan:
+        name: extra-small
+      api: https://api.((system_domain))
+      user: admin
+      password: ((cloudcache-admin-password))
+      skip_ssl_validation: ((skip_ssl_validation))
+  env:
+    bosh:
+      password: "$6$94f2351d4c652b0a$/QlOQJ7RjqJm/m/Pv38YLXr0.tom2UVK/7j35UTbSj8u4moI.R9K9AYQZAxMWHGti3AK0j/kgtI9YgdhHa9QA1"
+  update:
+    max_in_flight: 1
+  networks:
+  - name: private
+    default:
+    - dns
+    - gateway
+- name: upgrade-all-service-instances
+  azs:
+  - us-east-1a
+  instances: 1
+  lifecycle: errand
+  jobs:
+  - name: upgrade-all-service-instances
+    release: on-demand-service-broker
+    consumes: {}
+    provides: {}
+  vm_type: c4.large
+  stemcell: bosh-aws-xen-hvm-ubuntu-trusty-go_agent
+  properties:
+    broker_name: cloudcache-broker
+    disable_ssl_cert_verification: ((skip_ssl_validation))
+    cf:
+      api_url: https://api.((system_domain))
+      admin_username: push_apps_manager
+      admin_password: ((/aws-director-credhub/cf/push_apps_manager_password))
+    smoke_tests:
+      service_plan:
+        name: extra-small
+      api: https://api.((system_domain))
+      user: admin
+      password: ((cloudcache-admin-password))
+      skip_ssl_validation: ((skip_ssl_validation))
+  env:
+    bosh:
+      password: "$6$870410fbabb9335a$Xa/Sc9pBMG3iJ2ABGtyuBDGR5Ip6jtpHSwLwQX4hMrYYajdStOxj5YpLibZMTFbFY5fLlGVKpWpVlRR7/RUV51"
+  update:
+    max_in_flight: 1
+  networks:
+  - name: private
+    default:
+    - dns
+    - gateway
+- name: delete-all-service-instances
+  azs:
+  - services
+  instances: 1
+  lifecycle: errand
+  jobs:
+  - name: delete-all-service-instances
+    release: on-demand-service-broker
+    consumes: {}
+    provides: {}
+  vm_type: c4.large
+  stemcell: bosh-aws-xen-hvm-ubuntu-trusty-go_agent
+  properties:
+    broker_name: cloudcache-broker
+    disable_ssl_cert_verification: ((skip_ssl_validation))
+    cf:
+      api_url: https://api.((system_domain))
+      admin_username: push_apps_manager
+      admin_password: ((/aws-director-credhub/cf/push_apps_manager_password))
+    smoke_tests:
+      service_plan:
+        name: extra-small
+      api: https://api.((system_domain))
+      user: admin
+      password: ((cloudcache-admin-password))
+      skip_ssl_validation: true
+  env:
+    bosh:
+      password: "$6$a292329f2dc1103c$aY2hqc.vOUsLWhCx7tECL70HA.NzuyXCWc7wWzVEeV9GtUmim7hSsKH/kKBLfMehZQYbwF4ETo8sQ1lVlHE8p1"
+  update:
+    max_in_flight: 1
+  networks:
+  - name: private
+    default:
+    - dns
+    - gateway
+update:
+  canaries: 1
+  canary_watch_time: 30000-300000
+  update_watch_time: 30000-300000
+  max_in_flight: 1
+  max_errors: 2
+  serial: true
+
+  variables:
+- name: cloudcache-broker-password
+  type: password
+- name: cloudcache-uaa-password
+  type: password
+- name: cloudcache-admin-password
+  type: password
